@@ -2,11 +2,13 @@ package com.example.lastproject.domain.user.dto;
 
 import com.querydsl.core.annotations.QueryProjection;
 import lombok.Getter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 @Getter
+@ToString
 public class NearbyBookmarkUserDto {
 
     private final long userId;

@@ -66,6 +66,7 @@ public class NotificationAop {
                 partyResponse.getLongitude(),
                 partyResponse.getItemId()
         );
+        log.info("Nearby users: {}", nearbyUsers);
 
         // 주변 유저가 없으면 알림을 보내지 않음
         if (nearbyUsers.isEmpty()) {

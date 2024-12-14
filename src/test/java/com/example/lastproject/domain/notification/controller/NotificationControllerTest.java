@@ -55,7 +55,7 @@ class NotificationControllerTest {
                 Notification.builder()
                         .id(1L)
                         .notificationType(null)
-                        .receiver(new User(/* receiver 설정 */))
+                        .receiver(user)
                         .content("첫 번째 알림 내용")
                         .url("http://example.com/notification/1")
                         .isRead(false)

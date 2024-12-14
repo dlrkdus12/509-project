@@ -140,10 +140,10 @@ public class PartyController {
      * @param authUser 현재 로그인한 사용자
      * @return 조회된 파티 목록
      */
-    @GetMapping("/nearby-parties")
-    public ResponseEntity<List<NearbyPartyResponse>> getNearByParties(@AuthenticationPrincipal AuthUser authUser) {
-        List<NearbyPartyResponse> responses = partyService.getNearByParties(authUser);
-        return ResponseEntity.ok(responses);
-    }
+//    @GetMapping("/nearby-parties")
+//    public ResponseEntity<List<NearbyPartyResponse>> getNearByParties(@AuthenticationPrincipal AuthUser authUser) {
+//        List<NearbyPartyResponse> responses = partyService.getNearByParties(authUser);
+//        return ResponseEntity.ok(responses);
+//    }
 
 }

@@ -327,18 +327,18 @@ public class PartyService {
      * @param authUser 인증된 사용자
      * @return 사용자가 등록한 위치 반경 10KM 내의 파티목록
      */
-    public List<NearbyPartyResponse> getNearByParties(AuthUser authUser) {
-        User user = userRepository.findById(authUser.getUserId())
-                .orElseThrow(() -> new CustomException(ErrorCode.PARTY_NOT_FOUND));
-
-        // 위경도
-        BigDecimal latitude = user.getLatitude();
-        BigDecimal longitude = user.getLongitude();
-
-        List<NearbyPartyResponse> responses = partyRepository.getNearByParties(latitude, longitude);
-
-        return responses;
-    }
+//    public List<NearbyPartyResponse> getNearByParties(AuthUser authUser) {
+//        User user = userRepository.findById(authUser.getUserId())
+//                .orElseThrow(() -> new CustomException(ErrorCode.PARTY_NOT_FOUND));
+//
+//        // 위경도
+//        BigDecimal latitude = user.getLatitude();
+//        BigDecimal longitude = user.getLongitude();
+//
+//        List<NearbyPartyResponse> responses = partyRepository.getNearByParties(latitude, longitude);
+//
+//        return responses;
+//    }
 
 
 

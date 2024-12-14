@@ -37,10 +37,10 @@ public class User extends Timestamped {
     @Column(nullable = false)
     private String address;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 18, scale = 15)
     private BigDecimal latitude;
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 18, scale = 15)
     private BigDecimal longitude;
 
     @Enumerated(EnumType.STRING)

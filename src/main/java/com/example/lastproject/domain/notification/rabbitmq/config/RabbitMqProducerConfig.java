@@ -1,6 +1,5 @@
 package com.example.lastproject.domain.notification.rabbitmq.config;
 
-import com.example.lastproject.domain.notification.rabbitmq.consumer.listener.DynamicNotificationListenerConfigurer;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
