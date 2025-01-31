@@ -3,7 +3,10 @@ application.properties
 application.yml
 application-local.yml
 application-prod.yml
-build/
+# 빌드 파일 및 캐시 파일은 Git에서 무시
+/build/
+/.gradle/
+/*.log
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
@@ -38,3 +41,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+#### macOS ###
+#.DS_Store

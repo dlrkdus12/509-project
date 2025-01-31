@@ -1,6 +1,5 @@
 package com.example.lastproject.domain.chat.controller;
 
-import com.example.lastproject.common.annotation.SseNotify;
 import com.example.lastproject.common.dto.AuthUser;
 import com.example.lastproject.domain.chat.dto.ChatRoomResponse;
 import com.example.lastproject.domain.chat.service.ChatRoomService;

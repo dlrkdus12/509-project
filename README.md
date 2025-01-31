@@ -15,7 +15,7 @@
 
 ## 🔑 주요 기능
 
-![image](https://github.com/user-attachments/assets/4a892aa6-4c84-4573-bf54-4325eaf8aa62)
+![image](https://github.com/user-attachments/assets/42232c9f-1e2d-49f4-bf45-4b5c9db2987f)
 
 > * 파티 - 공동구매를 목적으로 만들어지는 모임
 > * 채팅 - 파티에 가입된 사람들끼리 실시간 채팅

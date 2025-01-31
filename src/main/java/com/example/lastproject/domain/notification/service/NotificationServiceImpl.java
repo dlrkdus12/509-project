@@ -4,15 +4,19 @@ import com.example.lastproject.common.dto.AuthUser;
 import com.example.lastproject.common.enums.ErrorCode;
 import com.example.lastproject.common.exception.CustomException;
 import com.example.lastproject.domain.chat.dto.ChatRoomResponse;
+import com.example.lastproject.domain.likeitem.dto.response.LikeItemResponse;
+import com.example.lastproject.domain.likeitem.repository.LikeItemQueryRepository;
 import com.example.lastproject.domain.notification.dto.NotificationListResponse;
 import com.example.lastproject.domain.notification.dto.NotificationResponse;
 import com.example.lastproject.domain.notification.entity.Notification;
 import com.example.lastproject.domain.notification.entity.NotificationType;
+import com.example.lastproject.domain.notification.kafka.service.KafkaProducerService;
 import com.example.lastproject.domain.notification.repository.EmitterRepository;
 import com.example.lastproject.domain.notification.repository.NotificationRepository;
-import com.example.lastproject.domain.party.dto.response.PartyResponse;
 import com.example.lastproject.domain.party.entity.Party;
+import com.example.lastproject.domain.party.repository.PartyQueryRepositoryImpl;
 import com.example.lastproject.domain.party.repository.PartyRepository;
+import com.example.lastproject.domain.user.dto.NearbyBookmarkUserDto;
 import com.example.lastproject.domain.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -31,18 +38,21 @@ import java.util.Map;
 @Slf4j
 public class NotificationServiceImpl implements NotificationService {
 
-    private final NotificationRepository notificationRepository;
     private final EmitterRepository emitterRepository;
     private final PartyRepository partyRepository;
+    private final PartyQueryRepositoryImpl partyQueryRepository;
+    private final LikeItemQueryRepository likeItemQueryRepository;  // 찜한 품목 조회를 위한 repository 추가
+    private final NotificationRepository notificationRepository;
+    private final KafkaProducerService kafkaProducer;
 
-    // 연결 지속시간 한시간
+    // 연결 지속시간 30분
     private static final Long DEFAULT_TIMEOUT = 30 * 60 * 1000L;
 
     @Value("${client.basic-url}")
     private String clientBasicUrl;
 
     /**
-     * SSE 연결
+     * SSE 연결: 클라이언트가 마지막으로 수신한 데이터를 기준으로 유실된 데이터를 다시 전송하거나 최초 연결 시 더미 데이터를 전송합니다.
      *
      * @param authUser    요청을 보낸 인증된 사용자 정보
      * @param lastEventId 클라이언트가 마지막으로 수신한 데이터의 Id값을 의미한다. 이를 이용하여 유실된 데이터를 다시 보내줄 수 있다.
@@ -55,18 +65,30 @@ public class NotificationServiceImpl implements NotificationService {
         SseEmitter emitter = emitterRepository.save(emitterId, new SseEmitter(DEFAULT_TIMEOUT));
 
         // SseEmitter 의 완료/시간초과/에러로 인한 전송 불가 시 SseEmitter 삭제
-        emitter.onCompletion(() -> emitterRepository.deleteById(emitterId));
-        emitter.onTimeout(() -> emitterRepository.deleteById(emitterId));
+        emitter.onCompletion(() -> {
+            emitterRepository.deleteById(emitterId);
+            log.info("SseEmitter connection completed and deleted: {}", emitterId);
+        });
+        emitter.onTimeout(() -> {
+            emitterRepository.deleteById(emitterId);
+            log.warn("SseEmitter connection timed out and deleted: {}", emitterId);
+        });
 
         if (!lastEventId.isEmpty()) {
             Map<String, Object> events = emitterRepository.findAllEventCacheStartWithByUserId(String.valueOf(authUser.getUserId()));
-            events.entrySet().stream()
+
+            // 이벤트를 한 번에 처리
+            List<NotificationResponse> responseList = events.entrySet().stream()
                     .filter(entry -> lastEventId.compareTo(entry.getKey()) < 0)
-                    .forEach(entry -> sendToClient(emitter, entry.getKey(), entry.getKey(), entry.getValue()));
+                    .map(entry -> NotificationResponse.of((Notification) entry.getValue()))
+                    .collect(Collectors.toList());
+
+            String eventId = makeTimeIncludeId(authUser); // 새로 생성된 이벤트 ID
+            sendToClient(emitter, emitterId, eventId, responseList); // 한 번에 전송
         } else {
-            // 최초 연결시 더미데이터가 없으면 503 오류가 발생하기 때문에 해당 더미 데이터 생성
             String eventId = makeTimeIncludeId(authUser);
-            sendToClient(emitter, emitterId, eventId, "연결되었습니다. EventStream Created. [userId=" + authUser.getUserId() + "]");
+            NotificationResponse dummyResponse = NotificationResponse.of("eventStream. [userId=" + authUser.getUserId() + "]");
+            sendToClient(emitter, emitterId, eventId, List.of(dummyResponse));
         }
         return emitter;
     }
@@ -82,92 +104,119 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     /**
-     * 클라이언트에게 데이터를 전송합니다.
+     * 클라이언트에게 데이터를 전송합니다. SseEmitter를 사용하여 SSE 이벤트를 발송합니다.
      *
      * @param emitter   SseEmitter 객체
      * @param emitterId 발신기 ID
      * @param eventId   이벤트 ID
-     * @param data      전송할 데이터
-     * @throws CustomException SSE 연결 오류 발생 시 예외를 던집니다.
+     * @param data      전송할 데이터 목록
      */
-    public void sendToClient(SseEmitter emitter, String emitterId, String eventId, Object data) {
+    private void sendToClient(SseEmitter emitter, String emitterId, String eventId, List<NotificationResponse> data) {
         try {
             emitter.send(SseEmitter.event()
                     .name("SSE")
                     .id(eventId)
                     .data(data));
         } catch (IOException exception) {
-            emitterRepository.deleteById(emitterId);
+            emitterRepository.deleteById(emitterId); // 실패 시 삭제
             log.info(exception.getMessage());
-//            throw new CustomException(ErrorCode.SSE_CONNECTION_ERROR); // 예외를 던지지 않고 로그만 남기도록 처리
         }
     }
 
     /**
-     * 알림을 저장하고, 저장된 알림을 클라이언트에게 전송합니다.
+     * 주어진 알림 목록을 저장한 후, 해당 알림을 지정된 사용자에게 전송합니다.
      *
-     * @param authUser 요청을 보낸 인증된 사용자 정보
+     * @param receiverId    알림을 받을 사용자 ID
+     * @param notifications 전송할 알림 목록
      */
     @Override
-    public void send(AuthUser authUser, Notification notification) {
-        sendNotification(authUser, saveNotification(authUser, notification));
+    public void send(Long receiverId, List<Notification> notifications) {
+        List<Notification> savedNotifications = saveNotifications(notifications);
+        sendNotifications(receiverId, savedNotifications);
     }
 
     /**
-     * 알림 저장
+     * 비동기 방식으로 사용자의 SSE Emitter에 알림을 전송합니다.
+     * 알림을 전송하기 전에, 알림을 캐시에 저장하여 유실 시 복구할 수 있도록 합니다.
      *
-     * @param authUser 요청을 보낸 인증된 사용자 정보
-     * @param
-     * @return 새롭게 생성된 알림 정보(id, content, type, enum, url, isRead, createdAt)가 포함된 notification 객체
-     */
-    @Transactional
-    @Override
-    public Notification saveNotification(AuthUser authUser, Notification notification) {
-        User.fromAuthUser(authUser);
-        notificationRepository.save(notification);
-        return notification;
-    }
-
-    /**
-     * 비동기적으로 알림을 전송합니다.
-     *
-     * @param authUser     요청을 보낸 인증된 사용자 정보
-     * @param notification 전송할 알림 정보
+     * @param receiverId   알림을 받을 사용자 ID
+     * @param notifications 전송할 알림 목록
      */
     @Async
     @Override
-    public void sendNotification(AuthUser authUser, Notification notification) {
-        String receiverId = String.valueOf(authUser.getUserId());
-        String eventId = receiverId + "_" + System.currentTimeMillis();
+    public void sendNotifications(Long receiverId, List<Notification> notifications) {
+        String receiverKey = String.valueOf(receiverId);
 
-        // 유저의 모든 SseEmitter 가져옴
-        Map<String, SseEmitter> emitters = emitterRepository.findAllEmitterStartWithByUserId(receiverId);
+        Map<String, SseEmitter> emitters = emitterRepository.findAllEmitterStartWithByUserId(receiverKey);
+
+        // 각 Emitter에 대해 알림 리스트 전송
         emitters.forEach(
                 (key, emitter) -> {
-                    // 데이터 캐시 저장 (유실된 데이터 처리 위함)
-                    emitterRepository.saveEventCache(key, notification);
-                    // 데이터 전송
-                    sendToClient(emitter, key, eventId, NotificationResponse.of(notification));
-                }
-        );
+                    String eventId = receiverKey + "_" + System.currentTimeMillis();
+
+                    // 알림을 NotificationResponse 리스트로 변환
+                    List<NotificationResponse> responses = notifications.stream()
+                            .map(NotificationResponse::of)
+                            .toList();
+
+                    // 알림 데이터를 캐시에 개별적으로 저장 (유실된 데이터 복구 목적)
+                    notifications.forEach(
+                            notification -> emitterRepository.saveEventCache(key, notification)
+                    );
+                    sendToClient(emitter, key, eventId, responses);
+//                    emitter.complete();
+                });
+    }
+
+    /**
+     * 알림 목록을 저장합니다.
+     *
+     * @param notifications 저장할 알림 목록
+     * @return 저장된 알림 목록
+     */
+    @Transactional
+    @Override
+    public List<Notification> saveNotifications(List<Notification> notifications) {
+        return notificationRepository.saveAll(notifications);
     }
 
     /**
      * 사용자가 찜한 품목에 대한 파티가 생성된 경우 해당 사용자에게 알림을 보냅니다.
      *
      * @param authUser 요청을 보낸 인증된 사용자 정보
-     * @param itemName 찜한 품목의 이름
      * @param partyId  생성된 파티의 ID
      */
     @Transactional
     @Override
-    public void notifyUsersAboutPartyCreation(AuthUser authUser, String itemName, Long partyId) {
-        User receiver = User.fromAuthUser(authUser);
-
+    public void notifyUsersAboutPartyCreation(AuthUser authUser, Long partyId) {
+        User.fromAuthUser(authUser);
         Party party = validatePartyExists(partyId);
 
-        // 메시지 구성
-        String message = String.format("%s %s %s 품목의 파티가 생성되었습니다.",
+        // 반경 10km 이내의 즐겨찾기 유저 조회
+        List<NearbyBookmarkUserDto> nearbyUsers = partyQueryRepository.getUserIdWithDistanceNearbyParty(
+                party.getLatitude(),
+                party.getLongitude(),
+                party.getItem().getId()
+        );
+//        log.info("Nearby users: {}", nearbyUsers);
+
+        // 주변 유저가 없으면 알림을 보내지 않음
+        if (nearbyUsers.isEmpty()) {
+//            log.info("10km 이내에 유저가 없습니다. 알림을 건너뜁니다.");
+            return; // 알림 대상이 없으면 종료
+        }
+
+        // 파티 생성한 유저의 찜한 품목 조회
+        List<LikeItemResponse> bookmarkedItems = likeItemQueryRepository.getBookmarkedItems(authUser.getUserId());
+
+        // 찜한 품목이 없으면 알림을 보내지 않음
+        if (bookmarkedItems.isEmpty()) {
+//            log.info("찜한 품목이 없습니다. 알림을 건너뜁니다.");
+            return;
+        }
+
+        // SSE 메시지 구성
+        String message = String.format("Created. %s %s %s",
                 party.getMarketAddress(),
                 party.getMarketName(),
                 party.getItem().getCategory()
@@ -175,28 +224,42 @@ public class NotificationServiceImpl implements NotificationService {
 
         String notificationUrl = String.format("%s/parties/%d", clientBasicUrl, partyId); // URL 생성
 
-        // Notification 엔티티 생성
-        Notification notification = Notification.builder()
-                .notificationType(NotificationType.PARTY_CREATE)
-                .content(message)
-                .url(notificationUrl)
-                .receiver(receiver)
-                .isRead(false) // 기본값 설정
-                .build();
+        // 알림 생성 및 저장
+        List<Notification> notifications = nearbyUsers.stream()
+                .map(userDto -> Notification.builder()
+                        .notificationType(NotificationType.PARTY_CREATE) // 알림 타입 설정
+                        .content(message) // 알림 내용
+                        .url(notificationUrl) // 알림 URL
+                        .receiverId(userDto.getUserId()) // 알림을 받을 유저 설정
+                        .isRead(false) // 기본값 설정 (읽지 않음)
+                        .build()
+                )
+                .toList();
 
-        send(authUser, notification);
+        // 알림을 유저별로 전송 (중복 호출 방지)
+        Map<Long, List<Notification>> notificationsGroupedByUser = notifications.stream()
+                .collect(Collectors.groupingBy(Notification::getReceiverId));
+
+        // 각 유저에게 알림을 한번에 전송
+        notificationsGroupedByUser.forEach((receiverId, userNotifications) -> { // 맵의 엔트리(entry) 를 순회
+            // 알림이 하나 이상 있을 때만 처리
+            if (!userNotifications.isEmpty()) {
+//                    kafkaProducer.sendMessage(userNotifications);  // 카프카 프로듀서로 알림 전송
+                send(receiverId, userNotifications); // 알림 리스트 전송
+            }
+        });
     }
 
     /**
      * 사용자가 찜한 품목의 파티가 취소된 경우 해당 사용자에게 알림을 보냅니다.
      *
      * @param authUser 요청을 보낸 인증된 사용자 정보
+     * @param partyId  취소된 파티의 ID
      */
     @Transactional
     @Override
     public void notifyUsersAboutPartyCancellation(AuthUser authUser, Long partyId) {
-        User receiver = User.fromAuthUser(authUser);
-
+        User.fromAuthUser(authUser);
         Party party = validatePartyExists(partyId);
 
         // 메시지 구성
@@ -206,62 +269,71 @@ public class NotificationServiceImpl implements NotificationService {
                 party.getItem().getCategory()
         );
 
-        String redirectUrl = clientBasicUrl + "/parties";
+        String notificationUrl = String.format("%s/parties", clientBasicUrl); // URL 생성
 
-        // Notification 엔티티 생성
-        Notification notification = Notification.builder()
-                .notificationType(NotificationType.PARTY_CANCEL)
-                .content(message)
-                .url(redirectUrl)
-                .receiver(receiver)
-                .isRead(false) // 기본값 설정
-                .build();
+        // 알림 생성 및 저장
+        List<Notification> notifications = party.getPartyMembers().stream()
+                .map(partyMember -> Notification.builder()
+                        .notificationType(NotificationType.PARTY_CREATE) // 알림 타입 설정
+                        .content(message) // 알림 내용
+                        .url(notificationUrl) // 알림 URL
+                        .receiverId(partyMember.getUser().getId()) // 알림을 받을 유저 설정
+                        .isRead(false) // 기본값 설정 (읽지 않음)
+                        .build()
+                )
+                .toList();
 
-        send(authUser, notification);
+        // 각 참가자에게 알림 전송
+        notifications.forEach(notification -> {
+            send(notification.getReceiverId(), List.of(notification));  // 각 사용자에게 알림을 전송
+        });
     }
 
     /**
-     * 참가 신청한 파티의 채팅창이 생성된 경우 알림을 보냅니다.
-     * @param authUser 요청을 보낸 인증된 사용자 정보
+     * 참가 신청한 파티의 채팅창이 생성된 경우 해당 사용자에게 알림을 보냅니다.
+     *
+     * @param authUser         요청을 보낸 인증된 사용자 정보
      * @param chatRoomResponse 생성된 파티의 채팅창
      */
     @Transactional
     @Override
     public void notifyUsersAboutPartyChatCreation(AuthUser authUser, ChatRoomResponse chatRoomResponse) {
-        User receiver = User.fromAuthUser(authUser);
+        User.fromAuthUser(authUser);
+        Party party = validatePartyExists(chatRoomResponse.getPartyId());
 
-        Party party = getParty(chatRoomResponse.getPartyId());
+        String notificationUrl = String.format("%s/chat/history/%d", clientBasicUrl, chatRoomResponse.getId()); // URL 생성
 
-        String redirectUrl = clientBasicUrl + "/chat/history/" + chatRoomResponse.getId();
 
         // 메시지 구성
-        String message = String.format("%s %s %s 품목의 채팅이 취소되었습니다.",
+        String message = String.format("%s %s %s 품목의 채팅이 생성되었습니다.",
                 party.getMarketAddress(),
                 party.getMarketName(),
                 party.getItem().getCategory()
         );
 
-        // Notification 엔티티 생성
-        Notification notification = Notification.builder()
-                .notificationType(NotificationType.CHAT_CREATE)
-                .content(message)
-                .url(redirectUrl)
-                .receiver(receiver)
-                .isRead(false) // 기본값 설정
-                .build();
+        // 알림 생성 및 저장
+        List<Notification> notifications = party.getPartyMembers().stream()
+                .map(partyMember -> Notification.builder()
+                        .notificationType(NotificationType.CHAT_CREATE) // 알림 타입 설정
+                        .content(message) // 알림 내용
+                        .url(notificationUrl) // 알림 URL
+                        .receiverId(partyMember.getUser().getId()) // 알림을 받을 유저 설정
+                        .isRead(false) // 기본값 설정 (읽지 않음)
+                        .build()
+                )
+                .toList();
 
-        send(authUser, notification);
-    }
-
-    private Party getParty(Long partyId) {
-        return validatePartyExists(partyId);
+        // 각 참가자에게 알림 전송
+        notifications.forEach(notification -> {
+            send(notification.getReceiverId(), List.of(notification));  // 각 사용자에게 알림을 전송
+        });
     }
 
     /**
      * 사용자의 알림 목록을 조회합니다.
      *
      * @param authUser 요청을 보낸 인증된 사용자 정보
-     * @return 사용자의 알림 목록을 포함한 NotificationListResponseDto
+     * @return 사용자의 알림 목록을 포함한 NotificationListResponse
      */
     @Override
     public NotificationListResponse getNotifications(AuthUser authUser) {
@@ -274,6 +346,7 @@ public class NotificationServiceImpl implements NotificationService {
      *
      * @param notificationId 읽음 처리할 알림 ID
      * @param authUser       요청을 보낸 인증된 사용자 정보
+     * @throws CustomException 알림을 찾을 수 없거나 알림을 읽을 수 없는 경우 예외가 발생합니다.
      */
     @Override
     @Transactional
@@ -289,6 +362,7 @@ public class NotificationServiceImpl implements NotificationService {
      *
      * @param notificationId 삭제할 알림의 ID
      * @param authUser       요청을 보낸 인증된 사용자 정보
+     * @throws CustomException 알림을 찾을 수 없거나 알림을 삭제할 권한이 없는 경우 예외가 발생합니다.
      */
     @Transactional
     @Override
@@ -311,12 +385,20 @@ public class NotificationServiceImpl implements NotificationService {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND_NOTIFICATION));
 
-        if (!notification.getReceiver().getId().equals(authUser.getUserId())) {
+        if (!notification.getReceiverId().equals(authUser.getUserId())) {
             throw new CustomException(ErrorCode.UNAUTHORIZED_ACCESS);
         }
     }
 
-    private Party validatePartyExists(Long partyId) {
+    /**
+     * 파티가 존재하는지 검증합니다.
+     *
+     * @param partyId 파티의 고유 ID
+     * @return 파티가 존재하면 해당 파티 객체를 반환합니다.
+     * @throws CustomException 파티가 존재하지 않으면 예외가 발생합니다.
+     */
+    @Override
+    public Party validatePartyExists(Long partyId) {
         return partyRepository.findById(partyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PARTY_NOT_FOUND));
     }

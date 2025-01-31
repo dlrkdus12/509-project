@@ -20,9 +20,8 @@ public class Notification extends Timestamped {
     @Enumerated(EnumType.STRING)
     private NotificationType notificationType;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receiver_id")
-    private User receiver;
+    @Column(nullable = false)
+    private Long receiverId;
 
     @Column(nullable = false)
     private String content;

@@ -1,6 +1,7 @@
 package com.example.lastproject.domain.user.dto;
 
 import com.querydsl.core.annotations.QueryProjection;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 
@@ -11,7 +12,7 @@ import java.math.RoundingMode;
 @ToString
 public class NearbyBookmarkUserDto {
 
-    private final long userId;
+    private final Long userId;
     private final String locationRange;
 
     @QueryProjection

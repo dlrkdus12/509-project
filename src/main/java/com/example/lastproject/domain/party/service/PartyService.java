@@ -7,7 +7,6 @@ import com.example.lastproject.domain.item.entity.Item;
 import com.example.lastproject.domain.item.repository.ItemRepository;
 import com.example.lastproject.domain.party.dto.request.PartyCreateRequest;
 import com.example.lastproject.domain.party.dto.request.PartyUpdateRequest;
-import com.example.lastproject.domain.party.dto.response.NearbyPartyResponse;
 import com.example.lastproject.domain.party.dto.response.PartyResponse;
 import com.example.lastproject.domain.party.entity.Party;
 import com.example.lastproject.domain.party.enums.PartyStatus;
@@ -19,12 +18,10 @@ import com.example.lastproject.domain.partymember.enums.PartyMemberInviteStatus;
 import com.example.lastproject.domain.partymember.enums.PartyMemberRole;
 import com.example.lastproject.domain.partymember.repository.PartyMemberRepository;
 import com.example.lastproject.domain.user.entity.User;
-import com.example.lastproject.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.Year;
 import java.time.format.DateTimeFormatter;
@@ -33,13 +30,12 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class PartyService {
 
     private final PartyRepository partyRepository;
     private final ItemRepository itemRepository;
     private final PartyMemberRepository partyMemberRepository;
-    private final UserRepository userRepository;
 
     // 공통으로 사용하는 partyId로 Party 객체를 조회하는 메서드
     private Party findPartyById(Long partyId) {
@@ -322,24 +318,5 @@ public class PartyService {
         }
         return false;
     }
-
-    /**
-     * @param authUser 인증된 사용자
-     * @return 사용자가 등록한 위치 반경 10KM 내의 파티목록
-     */
-//    public List<NearbyPartyResponse> getNearByParties(AuthUser authUser) {
-//        User user = userRepository.findById(authUser.getUserId())
-//                .orElseThrow(() -> new CustomException(ErrorCode.PARTY_NOT_FOUND));
-//
-//        // 위경도
-//        BigDecimal latitude = user.getLatitude();
-//        BigDecimal longitude = user.getLongitude();
-//
-//        List<NearbyPartyResponse> responses = partyRepository.getNearByParties(latitude, longitude);
-//
-//        return responses;
-//    }
-
-
 
 }

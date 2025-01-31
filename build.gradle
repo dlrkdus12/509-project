@@ -2,14 +2,14 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.4'
     id 'io.spring.dependency-management' version '1.1.6'
-    id 'io.gatling.gradle' version '3.9.5' // Gatling 플러그인 추가
+    id 'io.gatling.gradle' version '3.13.1.2'
 }
 
-    configurations {
-        compileOnly {
-            extendsFrom annotationProcessor
-        }
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
     }
+}
 
 java {
     toolchain {
@@ -24,6 +24,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
     implementation 'io.lettuce:lettuce-core:6.5.0.RELEASE'
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-web-services'
 
     // jwt
     compileOnly group: 'io.jsonwebtoken', name: 'jjwt-api', version: '0.11.5'
@@ -31,7 +32,10 @@ dependencies {
     runtimeOnly group: 'io.jsonwebtoken', name: 'jjwt-jackson', version: '0.11.5'
 
     // notifications
-    implementation 'org.springframework.boot:spring-boot-starter-web-services'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'io.gatling:gatling-core:3.13.1'
+    testImplementation 'io.gatling.highcharts:gatling-charts-highcharts:3.13.1'
 
     // WebSocket
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
@@ -47,10 +51,6 @@ dependencies {
     runtimeOnly 'com.h2database:h2'
     runtimeOnly 'com.mysql:mysql-connector-j'
     annotationProcessor 'org.projectlombok:lombok'
-
-
-    implementation 'org.springframework.boot:spring-boot-starter-amqp'
-
 }
 
 allprojects {
@@ -76,6 +76,7 @@ allprojects {
         runtimeOnly 'com.h2database:h2'
         runtimeOnly 'com.mysql:mysql-connector-j'
         annotationProcessor 'org.projectlombok:lombok'
+        implementation 'org.springframework.boot:spring-boot-starter'
 
         // test
         testImplementation 'org.springframework.boot:spring-boot-starter-test'

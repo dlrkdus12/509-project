@@ -5,7 +5,6 @@ import com.example.lastproject.common.enums.CustomMessage;
 import com.example.lastproject.domain.notification.dto.NotificationListResponse;
 import com.example.lastproject.domain.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,7 +26,6 @@ public class NotificationController {
      * @return 클라이언트와 연결을 담당하는 SseEmitter 객체 반환
      */
     @GetMapping(value = "/connect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @ResponseStatus(HttpStatus.OK)
     public ResponseEntity<SseEmitter> subscribe(
             @AuthenticationPrincipal AuthUser authUser,
             @RequestHeader(value = "Last-Event-ID", required = false, defaultValue = "") String lastEventId) {
