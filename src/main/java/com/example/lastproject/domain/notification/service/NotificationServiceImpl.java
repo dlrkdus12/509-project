@@ -27,9 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -41,7 +41,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final EmitterRepository emitterRepository;
     private final PartyRepository partyRepository;
     private final PartyQueryRepositoryImpl partyQueryRepository;
-    private final LikeItemQueryRepository likeItemQueryRepository;  // 찜한 품목 조회를 위한 repository 추가
+    private final LikeItemQueryRepository likeItemQueryRepository;
     private final NotificationRepository notificationRepository;
     private final KafkaProducerService kafkaProducer;
 
@@ -74,6 +74,7 @@ public class NotificationServiceImpl implements NotificationService {
             log.warn("SseEmitter connection timed out and deleted: {}", emitterId);
         });
 
+        // 이벤트 발생시 (lastEventId가 있을 때 이 구문을 통과)
         if (!lastEventId.isEmpty()) {
             Map<String, Object> events = emitterRepository.findAllEventCacheStartWithByUserId(String.valueOf(authUser.getUserId()));
 
@@ -84,8 +85,11 @@ public class NotificationServiceImpl implements NotificationService {
                     .collect(Collectors.toList());
 
             String eventId = makeTimeIncludeId(authUser); // 새로 생성된 이벤트 ID
-            sendToClient(emitter, emitterId, eventId, responseList); // 한 번에 전송
-        } else {
+            NotificationResponse dummyResponse = NotificationResponse.of("partyCreat");
+            sendToClient(emitter, emitterId, eventId, List.of(dummyResponse));
+        }
+        // 처음 sse 연결 (lastEventId가 비어있을 때)
+        else {
             String eventId = makeTimeIncludeId(authUser);
             NotificationResponse dummyResponse = NotificationResponse.of("eventStream. [userId=" + authUser.getUserId() + "]");
             sendToClient(emitter, emitterId, eventId, List.of(dummyResponse));
@@ -100,8 +104,7 @@ public class NotificationServiceImpl implements NotificationService {
      * @return 사용자 ID와 현재 시간이 포함된 문자열 ID
      */
     private String makeTimeIncludeId(AuthUser authUser) {
-        return authUser.getUserId() + "_" + System.currentTimeMillis();
-    }
+        return authUser.getUserId() + "_" + UUID.randomUUID().toString();    }
 
     /**
      * 클라이언트에게 데이터를 전송합니다. SseEmitter를 사용하여 SSE 이벤트를 발송합니다.
@@ -113,13 +116,21 @@ public class NotificationServiceImpl implements NotificationService {
      */
     private void sendToClient(SseEmitter emitter, String emitterId, String eventId, List<NotificationResponse> data) {
         try {
-            emitter.send(SseEmitter.event()
-                    .name("SSE")
-                    .id(eventId)
-                    .data(data));
+            for (NotificationResponse notification : data) {
+
+                emitter.send(SseEmitter
+                        .event()
+                        .name("SSE") // 이벤트 이름
+                        .id(eventId) // 이벤트 ID
+                        .data(notification)); // 개별 객체 전송
+            }
         } catch (IOException exception) {
+            if (exception.getMessage().contains("Broken pipe")) {
+                log.warn("Client disconnected prematurely - emitterId: {}", emitterId);
+            } else {
+                log.error("SSE 전송 실패 - emitterId: {}, error: {}", emitterId, exception.getMessage());
+            }
             emitterRepository.deleteById(emitterId); // 실패 시 삭제
-            log.info(exception.getMessage());
         }
     }
 
@@ -152,19 +163,20 @@ public class NotificationServiceImpl implements NotificationService {
         // 각 Emitter에 대해 알림 리스트 전송
         emitters.forEach(
                 (key, emitter) -> {
-                    String eventId = receiverKey + "_" + System.currentTimeMillis();
-
-                    // 알림을 NotificationResponse 리스트로 변환
-                    List<NotificationResponse> responses = notifications.stream()
-                            .map(NotificationResponse::of)
-                            .toList();
+                    String eventId = receiverKey + "_" + UUID.randomUUID();
 
                     // 알림 데이터를 캐시에 개별적으로 저장 (유실된 데이터 복구 목적)
                     notifications.forEach(
                             notification -> emitterRepository.saveEventCache(key, notification)
                     );
+
+                    // 📌 실제 알림 리스트를 NotificationResponse 객체로 변환
+                    List<NotificationResponse> responses = notifications.stream()
+                            .map(NotificationResponse::of)
+                            .toList();
+
                     sendToClient(emitter, key, eventId, responses);
-//                    emitter.complete();
+                    log.info("🐝 eventId {}", eventId);
                 });
     }
 

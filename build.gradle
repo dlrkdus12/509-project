@@ -34,8 +34,8 @@ dependencies {
     // notifications
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.kafka:spring-kafka'
-    testImplementation 'io.gatling:gatling-core:3.13.1'
-    testImplementation 'io.gatling.highcharts:gatling-charts-highcharts:3.13.1'
+    implementation 'io.gatling:gatling-core:3.13.3'
+    implementation 'io.gatling:gatling-http:3.13.3'
 
     // WebSocket
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
