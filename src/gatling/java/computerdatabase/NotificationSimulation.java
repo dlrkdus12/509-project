@@ -15,7 +15,7 @@ public class NotificationSimulation extends Simulation {
     private final HttpProtocolBuilder httpProtocol = http
             .baseUrl("http://localhost:8080");
 
-    SseMessageCheck sseCheck = sse.checkMessage("sse login message")
+    SseMessageCheck sseCheck = sse.checkMessage("sse connection message")
             .check(bodyString().saveAs("responseBody1"))
             .check(regex("id\":\"(.*?)\"").saveAs("lastEventId"));  // 이벤트의 id 추출
 
@@ -40,25 +40,26 @@ public class NotificationSimulation extends Simulation {
 
     FeederBuilder<String> jwtFeeder = csv("jwtTokens.csv").circular();
 
-    private final ScenarioBuilder scn = scenario("SSE Latency Test")
+    private final ScenarioBuilder scn = scenario("Notification Test")
             .feed(jwtFeeder)
             .exec(sse("SSE Connection")
-                    .sseName("connection")
+                    .sseName("SSE Connection")
                     .get("/notifications/connect")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .await(100).on(sseCheck, sseCheck2))
-            .exec(session -> {
-                // Session에서 responseBody 가져와서 로그에 출력
-                String responseBody1 = session.getString("responseBody1");
-                String responseBody2 = session.getString("responseBody2");
-                System.out.println("🐝 Response Body: " + responseBody1);
-                System.out.println("🐝 Response Body: " + responseBody2);
-                return session;
-            });
+                    .await(30).on(sseCheck, sseCheck2));
+//            .exec(session -> {
+//                String responseBody1 = session.getString("responseBody1");
+//                String responseBody2 = session.getString("responseBody2");
+//                System.out.println("🐝 Response Body: " + responseBody1);
+//                System.out.println("🐝 Response Body: " + responseBody2);
+//                return session;
+//            })
+//            .pause(10)
+//            .exec(sse("SSE Connection").sseName("SSE Connection").close());
 
     private final ScenarioBuilder party = scenario("http Test")
             .feed(jwtFeeder)
-            .exec(http("party")
+            .exec(http("Party Test")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
                     .body(StringBody(CREATE_PARTY_BODY))
@@ -67,8 +68,8 @@ public class NotificationSimulation extends Simulation {
 
     {
         setUp(
-                scn.injectOpen(rampUsers(5).during(10)), // 1명의 사용자가 테스트 실행
-                party.injectOpen(rampUsers(5).during(10))
+                scn.injectOpen(rampUsers(4000).during(10)),
+                party.injectOpen(rampUsers(4000).during(10))
         ).protocols(httpProtocol);
     }
 }

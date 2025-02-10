@@ -29,7 +29,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -58,35 +57,41 @@ public class NotificationServiceImpl implements NotificationService {
      * @param lastEventId 클라이언트가 마지막으로 수신한 데이터의 Id값을 의미한다. 이를 이용하여 유실된 데이터를 다시 보내줄 수 있다.
      * @return SseEmitter(발신기)를 생성하여 반환합니다.
      */
-    @Transactional
     @Override
     public SseEmitter subscribe(AuthUser authUser, String lastEventId) {
         String emitterId = makeTimeIncludeId(authUser);
         SseEmitter emitter = emitterRepository.save(emitterId, new SseEmitter(DEFAULT_TIMEOUT));
 
-        // SseEmitter 의 완료/시간초과/에러로 인한 전송 불가 시 SseEmitter 삭제
+        // SSE 완료될 때
         emitter.onCompletion(() -> {
             emitterRepository.deleteById(emitterId);
             log.info("SseEmitter connection completed and deleted: {}", emitterId);
         });
+
+        // SSE 타임아웃될 때
         emitter.onTimeout(() -> {
             emitterRepository.deleteById(emitterId);
             log.warn("SseEmitter connection timed out and deleted: {}", emitterId);
         });
 
-        // 이벤트 발생시 (lastEventId가 있을 때 이 구문을 통과)
+        // SSE 에러 발생 시
+        emitter.onError((e) -> {
+            emitterRepository.deleteById(emitterId);
+            log.error("SseEmitter connection error: {}, error: {}", emitterId, e.getMessage());
+        });
+
+        // 이벤트 발생시 lastEventId가 있을 때 이 구문을 통과
         if (!lastEventId.isEmpty()) {
             Map<String, Object> events = emitterRepository.findAllEventCacheStartWithByUserId(String.valueOf(authUser.getUserId()));
 
-            // 이벤트를 한 번에 처리
+            // events.entrySet()은 events 맵의 **모든 항목(키, 값)**을 순차적으로 가져옴
             List<NotificationResponse> responseList = events.entrySet().stream()
                     .filter(entry -> lastEventId.compareTo(entry.getKey()) < 0)
                     .map(entry -> NotificationResponse.of((Notification) entry.getValue()))
                     .collect(Collectors.toList());
 
             String eventId = makeTimeIncludeId(authUser); // 새로 생성된 이벤트 ID
-            NotificationResponse dummyResponse = NotificationResponse.of("partyCreat");
-            sendToClient(emitter, emitterId, eventId, List.of(dummyResponse));
+            sendToClient(emitter, emitterId, eventId, responseList);
         }
         // 처음 sse 연결 (lastEventId가 비어있을 때)
         else {
@@ -96,7 +101,6 @@ public class NotificationServiceImpl implements NotificationService {
         }
         return emitter;
     }
-
     /**
      * 데이터 유실 시점을 파악하기 위해 사용자 ID와 현재 시간을 포함한 ID를 생성합니다.
      *
@@ -104,7 +108,8 @@ public class NotificationServiceImpl implements NotificationService {
      * @return 사용자 ID와 현재 시간이 포함된 문자열 ID
      */
     private String makeTimeIncludeId(AuthUser authUser) {
-        return authUser.getUserId() + "_" + UUID.randomUUID().toString();    }
+        return authUser.getUserId() + "_" + System.currentTimeMillis();
+    }
 
     /**
      * 클라이언트에게 데이터를 전송합니다. SseEmitter를 사용하여 SSE 이벤트를 발송합니다.
@@ -130,7 +135,7 @@ public class NotificationServiceImpl implements NotificationService {
             } else {
                 log.error("SSE 전송 실패 - emitterId: {}, error: {}", emitterId, exception.getMessage());
             }
-            emitterRepository.deleteById(emitterId); // 실패 시 삭제
+            emitterRepository.deleteById(emitterId);
         }
     }
 
@@ -163,7 +168,7 @@ public class NotificationServiceImpl implements NotificationService {
         // 각 Emitter에 대해 알림 리스트 전송
         emitters.forEach(
                 (key, emitter) -> {
-                    String eventId = receiverKey + "_" + UUID.randomUUID();
+                    String eventId = receiverKey + "_" + System.currentTimeMillis();
 
                     // 알림 데이터를 캐시에 개별적으로 저장 (유실된 데이터 복구 목적)
                     notifications.forEach(
@@ -176,7 +181,6 @@ public class NotificationServiceImpl implements NotificationService {
                             .toList();
 
                     sendToClient(emitter, key, eventId, responses);
-                    log.info("🐝 eventId {}", eventId);
                 });
     }
 
