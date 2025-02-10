@@ -15,18 +15,53 @@ public class NotificationSimulation extends Simulation {
     private final HttpProtocolBuilder httpProtocol = http
             .baseUrl("http://localhost:8080");
 
-    SseMessageCheck sseCheck = sse.checkMessage("sse connection message")
-            .check(bodyString().saveAs("responseBody1"))
-            .check(regex("id\":\"(.*?)\"").saveAs("lastEventId"));  // 이벤트의 id 추출
+    SseMessageCheck sseCheck1 = sse.checkMessage("sse connection message");
+//            .check(bodyString().saveAs("responseBody1"))
+//            .check(regex("id\":\"(.*?)\""));
 
-    SseMessageCheck sseCheck2 = sse.checkMessage("party creation message")
-            .check(bodyString().saveAs("responseBody2"));
+    SseMessageCheck sseCheck2 = sse.checkMessage("party creation message");
+//            .check(bodyString().saveAs("responseBody2"));
+
+    SseMessageCheck sseCheck3 = sse.checkMessage("party creation message");
+//            .check(bodyString().saveAs("responseBody3"));
+
+    SseMessageCheck sseCheck4 = sse.checkMessage("party creation message");
+//            .check(bodyString().saveAs("responseBody4"));
 
     // 파티 생성 요청 본문
-    private static final String CREATE_PARTY_BODY = """
+    private static final String REGION_NOWON = """
                 {
                     "marketName" : "이마트 노원점",
                     "marketAddress" : "서울 노원구",
+                    "latitude": "37.6973319258532",
+                    "longitude": "127.047377408383",
+                    "itemId" : 1,
+                    "itemCount" : 2,
+                    "itemUnit" : "kg",
+                    "startTime" : "11-22 16:20",
+                    "endTime" : "11-22 18:00",
+                    "membersCount" : 3
+                }
+            """;
+    private static final String REGION_GANGNAM = """
+                {
+                    "marketName" : "이마트 강남점",
+                    "marketAddress" : "서울 강남구",
+                    "latitude": "37.6973319258532",
+                    "longitude": "127.047377408383",
+                    "itemId" : 1,
+                    "itemCount" : 2,
+                    "itemUnit" : "kg",
+                    "startTime" : "11-22 16:20",
+                    "endTime" : "11-22 18:00",
+                    "membersCount" : 3
+                }
+            """;
+
+    private static final String REGION_DONGJAG = """
+                {
+                    "marketName" : "이마트 동작점",
+                    "marketAddress" : "서울 동작구",
                     "latitude": "37.6973319258532",
                     "longitude": "127.047377408383",
                     "itemId" : 1,
@@ -46,30 +81,53 @@ public class NotificationSimulation extends Simulation {
                     .sseName("SSE Connection")
                     .get("/notifications/connect")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .await(30).on(sseCheck, sseCheck2));
+                    .await(20)
+                    .on(sseCheck1, sseCheck2, sseCheck3, sseCheck4));
 //            .exec(session -> {
 //                String responseBody1 = session.getString("responseBody1");
 //                String responseBody2 = session.getString("responseBody2");
+//                String responseBody3 = session.getString("responseBody3");
+//                String responseBody4 = session.getString("responseBody4");
 //                System.out.println("🐝 Response Body: " + responseBody1);
 //                System.out.println("🐝 Response Body: " + responseBody2);
+//                System.out.println("🐝 Response Body: " + responseBody3);
+//                System.out.println("🐝 Response Body: " + responseBody4);
 //                return session;
-//            })
-//            .pause(10)
-//            .exec(sse("SSE Connection").sseName("SSE Connection").close());
+//            });
 
-    private final ScenarioBuilder party = scenario("http Test")
+    private final ScenarioBuilder party1 = scenario("http Test1")
             .feed(jwtFeeder)
-            .exec(http("Party Test")
+            .exec(http("Party nowon Test")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .body(StringBody(CREATE_PARTY_BODY))
+                    .body(StringBody(REGION_NOWON))
+                    .asJson()
+                    .check(status().is(201)));
+
+    private final ScenarioBuilder party2 = scenario("http Test2")
+            .feed(jwtFeeder)
+            .exec(http("Party dongjag Test")
+                    .post("/parties")
+                    .header("Authorization", "Bearer #{jwtToken}")
+                    .body(StringBody(REGION_DONGJAG))
+                    .asJson()
+                    .check(status().is(201)));
+
+    private final ScenarioBuilder party3 = scenario("http Test3")
+            .feed(jwtFeeder)
+            .exec(http("Party gangnam Test")
+                    .post("/parties")
+                    .header("Authorization", "Bearer #{jwtToken}")
+                    .body(StringBody(REGION_GANGNAM))
                     .asJson()
                     .check(status().is(201)));
 
     {
         setUp(
-                scn.injectOpen(rampUsers(4000).during(10)),
-                party.injectOpen(rampUsers(4000).during(10))
+                scn.injectOpen(rampUsers(1000).during(10)),
+                party1.injectOpen(rampUsers(1000).during(10)),
+                party2.injectOpen(rampUsers(1000).during(10)),
+                party3.injectOpen(rampUsers(1000).during(10))
         ).protocols(httpProtocol);
     }
 }

@@ -101,6 +101,7 @@ public class NotificationServiceImpl implements NotificationService {
         }
         return emitter;
     }
+
     /**
      * 데이터 유실 시점을 파악하기 위해 사용자 ID와 현재 시간을 포함한 ID를 생성합니다.
      *
@@ -155,7 +156,7 @@ public class NotificationServiceImpl implements NotificationService {
      * 비동기 방식으로 사용자의 SSE Emitter에 알림을 전송합니다.
      * 알림을 전송하기 전에, 알림을 캐시에 저장하여 유실 시 복구할 수 있도록 합니다.
      *
-     * @param receiverId   알림을 받을 사용자 ID
+     * @param receiverId    알림을 받을 사용자 ID
      * @param notifications 전송할 알림 목록
      */
     @Async
@@ -260,7 +261,7 @@ public class NotificationServiceImpl implements NotificationService {
         notificationsGroupedByUser.forEach((receiverId, userNotifications) -> { // 맵의 엔트리(entry) 를 순회
             // 알림이 하나 이상 있을 때만 처리
             if (!userNotifications.isEmpty()) {
-//                    kafkaProducer.sendMessage(userNotifications);  // 카프카 프로듀서로 알림 전송
+                kafkaProducer.sendMessage(userNotifications);  // 카프카 프로듀서로 알림 전송
                 send(receiverId, userNotifications); // 알림 리스트 전송
             }
         });
