@@ -16,7 +16,7 @@ public class NotificationSimulation extends Simulation {
             .baseUrl("http://localhost:8080");
 
     SseMessageCheck sseCheck1 = sse.checkMessage("sse connection message");
-//            .check(bodyString().saveAs("responseBody1"))
+//            .check(bodyString().saveAs("responseBody1"));
 //            .check(regex("id\":\"(.*?)\""));
 
     SseMessageCheck sseCheck2 = sse.checkMessage("party creation message");
@@ -81,7 +81,7 @@ public class NotificationSimulation extends Simulation {
                     .sseName("SSE Connection")
                     .get("/notifications/connect")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .await(20)
+                    .await(100)
                     .on(sseCheck1, sseCheck2, sseCheck3, sseCheck4));
 //            .exec(session -> {
 //                String responseBody1 = session.getString("responseBody1");
@@ -124,10 +124,10 @@ public class NotificationSimulation extends Simulation {
 
     {
         setUp(
-                scn.injectOpen(rampUsers(1000).during(10)),
-                party1.injectOpen(rampUsers(1000).during(10)),
-                party2.injectOpen(rampUsers(1000).during(10)),
-                party3.injectOpen(rampUsers(1000).during(10))
+                scn.injectOpen(rampUsers(1000).during(130)),
+                party1.injectOpen(rampUsers(1000).during(130)),
+                party2.injectOpen(rampUsers(1000).during(130)),
+                party3.injectOpen(rampUsers(1000).during(130))
         ).protocols(httpProtocol);
     }
 }

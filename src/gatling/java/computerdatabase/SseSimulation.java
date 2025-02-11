@@ -15,9 +15,10 @@ public class SseSimulation extends Simulation {
             .baseUrl("http://localhost:8080");
 
     SseMessageCheck sseCheck1 = sse.checkMessage("sse connection message");
-
+//            .check(bodyString().saveAs("responseBody1"));
 
     SseMessageCheck sseCheck2 = sse.checkMessage("party creation message");
+//            .check(bodyString().saveAs("responseBody2"));
 
     private static final String REGION_NOWON = """
                 {
@@ -42,8 +43,15 @@ public class SseSimulation extends Simulation {
                     .sseName("SSE Connection")
                     .get("/notifications/connect")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .await(20)
-                    .on(sseCheck1, sseCheck2));
+                    .await(100)
+                    .on(sseCheck1, sseCheck2, sseCheck2, sseCheck2));
+//            .exec(session -> {
+//                String responseBody1 = session.getString("responseBody1");
+//                String responseBody2 = session.getString("responseBody2");
+//                System.out.println("🐝 Response Body: " + responseBody1);
+//                System.out.println("🐝 Response Body: " + responseBody2);
+//                return session;
+//            });;
 
     private final ScenarioBuilder party1 = scenario("http Test1")
             .feed(jwtFeeder)
@@ -56,8 +64,8 @@ public class SseSimulation extends Simulation {
 
     {
         setUp(
-                scn.injectOpen(rampUsers(3000).during(10)),
-                party1.injectOpen(rampUsers(3000).during(10))
+                scn.injectOpen(rampUsers(1000).during(130)),
+                party1.injectOpen(rampUsers(3000).during(130))
 
         ).protocols(httpProtocol);
     }

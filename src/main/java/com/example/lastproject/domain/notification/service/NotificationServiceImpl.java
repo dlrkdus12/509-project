@@ -261,7 +261,7 @@ public class NotificationServiceImpl implements NotificationService {
         notificationsGroupedByUser.forEach((receiverId, userNotifications) -> { // 맵의 엔트리(entry) 를 순회
             // 알림이 하나 이상 있을 때만 처리
             if (!userNotifications.isEmpty()) {
-                kafkaProducer.sendMessage(userNotifications);  // 카프카 프로듀서로 알림 전송
+//                kafkaProducer.sendMessage(userNotifications);  // 카프카 프로듀서로 알림 전송
                 send(receiverId, userNotifications); // 알림 리스트 전송
             }
         });
