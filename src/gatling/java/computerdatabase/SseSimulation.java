@@ -37,7 +37,7 @@ public class SseSimulation extends Simulation {
 
     FeederBuilder<String> jwtFeeder = csv("jwtTokens.csv").circular();
 
-    private final ScenarioBuilder scn = scenario("Notification Test")
+    private final ScenarioBuilder sseScenario = scenario("Notification Test")
             .feed(jwtFeeder)
             .exec(sse("SSE Connection")
                     .sseName("SSE Connection")
@@ -53,9 +53,9 @@ public class SseSimulation extends Simulation {
 //                return session;
 //            });;
 
-    private final ScenarioBuilder party1 = scenario("http Test1")
+    private final ScenarioBuilder partyScenario = scenario("Party Nowon")
             .feed(jwtFeeder)
-            .exec(http("Party nowon Test")
+            .exec(http("Event party nowon")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
                     .body(StringBody(REGION_NOWON))
@@ -64,8 +64,8 @@ public class SseSimulation extends Simulation {
 
     {
         setUp(
-                scn.injectOpen(rampUsers(1000).during(130)),
-                party1.injectOpen(rampUsers(3000).during(130))
+                sseScenario.injectOpen(rampUsers(1000).during(130)),
+                partyScenario.injectOpen(rampUsers(3000).during(130))
 
         ).protocols(httpProtocol);
     }

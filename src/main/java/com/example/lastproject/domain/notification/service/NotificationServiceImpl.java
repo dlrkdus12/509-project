@@ -93,7 +93,7 @@ public class NotificationServiceImpl implements NotificationService {
             String eventId = makeTimeIncludeId(authUser); // 새로 생성된 이벤트 ID
             sendToClient(emitter, emitterId, eventId, responseList);
         }
-        // 처음 sse 연결 (lastEventId가 비어있을 때)
+        // 처음 sse 연결 lastEventId가 비어있을 때 더미이벤트 전송
         else {
             String eventId = makeTimeIncludeId(authUser);
             NotificationResponse dummyResponse = NotificationResponse.of("eventStream. [userId=" + authUser.getUserId() + "]");

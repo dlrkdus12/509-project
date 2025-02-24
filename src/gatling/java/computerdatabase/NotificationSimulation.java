@@ -58,7 +58,7 @@ public class NotificationSimulation extends Simulation {
                 }
             """;
 
-    private static final String REGION_DONGJAG = """
+    private static final String REGION_DONGJAK = """
                 {
                     "marketName" : "이마트 동작점",
                     "marketAddress" : "서울 동작구",
@@ -75,7 +75,7 @@ public class NotificationSimulation extends Simulation {
 
     FeederBuilder<String> jwtFeeder = csv("jwtTokens.csv").circular();
 
-    private final ScenarioBuilder scn = scenario("Notification Test")
+    private final ScenarioBuilder sseScenario = scenario("Notification Test")
             .feed(jwtFeeder)
             .exec(sse("SSE Connection")
                     .sseName("SSE Connection")
@@ -95,27 +95,27 @@ public class NotificationSimulation extends Simulation {
 //                return session;
 //            });
 
-    private final ScenarioBuilder party1 = scenario("http Test1")
+    private final ScenarioBuilder party1 = scenario("Party Nowon")
             .feed(jwtFeeder)
-            .exec(http("Party nowon Test")
+            .exec(http("Event party nowon")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
                     .body(StringBody(REGION_NOWON))
                     .asJson()
                     .check(status().is(201)));
 
-    private final ScenarioBuilder party2 = scenario("http Test2")
+    private final ScenarioBuilder party2 = scenario("Party Dongjak")
             .feed(jwtFeeder)
-            .exec(http("Party dongjag Test")
+            .exec(http("Event party dongjak")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
-                    .body(StringBody(REGION_DONGJAG))
+                    .body(StringBody(REGION_DONGJAK))
                     .asJson()
                     .check(status().is(201)));
 
-    private final ScenarioBuilder party3 = scenario("http Test3")
+    private final ScenarioBuilder party3 = scenario("Party Gangnam")
             .feed(jwtFeeder)
-            .exec(http("Party gangnam Test")
+            .exec(http("Event party gangnam")
                     .post("/parties")
                     .header("Authorization", "Bearer #{jwtToken}")
                     .body(StringBody(REGION_GANGNAM))
@@ -124,7 +124,7 @@ public class NotificationSimulation extends Simulation {
 
     {
         setUp(
-                scn.injectOpen(rampUsers(1000).during(130)),
+                sseScenario.injectOpen(rampUsers(1000).during(130)),
                 party1.injectOpen(rampUsers(1000).during(130)),
                 party2.injectOpen(rampUsers(1000).during(130)),
                 party3.injectOpen(rampUsers(1000).during(130))

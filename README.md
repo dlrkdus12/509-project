@@ -65,6 +65,26 @@
 <img src="https://img.shields.io/badge/RabbitMQ-FF6600?style=for-the-badge&logo=rabbitmq&logoColor=white"> <img src="https://img.shields.io/badge/Redis Pub/Sub-F63440?style=for-the-badge&logo=googlepubsub&logoColor=white">
 
 ## 📯기술적 의사결정
+<details>
+  <summary><span style="font-size:1.2em"><strong>RabbitMQ 지역 기반 큐 생성과 SSE 알림 시스템 구현</strong></span></summary>
+
+- 요구사항 : 실시간 단방향 알림의 트래픽 몰림 상황을 효율적으로 처리하고 안정성 확보
+
+| 대안 | 장점 | 단점                    |
+| --- | ---- |-----------------------|
+| WebSocket | ● 클라이언트와 서버 간에 양방향 통신이 가능한 지속적인 연결을 제공 | ● 구현이 복잡하고 높은 리소스를 소모 |
+| Long Polling | ● 클라이언트가 서버에 데이터를 요청하면, 서버는 즉시 응답을 보내지 않고 데이터가 준비될 때까지 대기 상태를 유지<br>● 양방향 통신이 가능하고 실시간 데이터 처리가 가능 | ● 빈번한 연결과 응답을 반복하여 서버 부하가 증가 |
+| SSE | ● 서버 리소스 소모 적음<br>● Keep-Alive로 연결 유지 비용 낮음<br>● 단순하고 간편한 구현 | ● 바이너리 데이터 전송 제한<br>● 단방향 통신 |
+
+- 기술결정 : 서버에서 클라이언트로만 데이터 푸시가 필요한 경우에 적합하고, 사용자가 적은 리소스로 연결을 유지하기 때문에 SSE 방식 선택
+</details>
+
+- 성능 개선 사항
+  - 평균 응답 시간 <span style="color:orange; font-weight:bold;">52.6% 감소</span>
+  - 표준 편차 응답 시간 <span style="color:orange; font-weight:bold;">40% 감소</span>
+  - 전후 비교
+    <br/>
+    ![image](https://github.com/user-attachments/assets/4b7d2210-2712-4b66-a616-5be26b55b395)
 
 
 <details>
@@ -145,20 +165,6 @@
 | Jenkins | ● 높은 유연성과 확장성을 제공<br>● GitHub 외의 다양한 버전 관리 시스템과 연동가능 | ● 자체 서버 설치 및 운영이 필요하므로 유지 관리 비용이 증가<br>● 초기 설정이 GitHub Actions보다 복잡 |
 
 - 기술결정 : GitHub Actions이 GitHub와의 통합이 매끄럽고 설정이 간단해 더 효율적이라고 판단
-</details>
-
-<details>
-  <summary><span style="font-size:1.2em"><strong>알림 구현</strong></span></summary>
-
-- 요구사항 : 사용자 경험을 향상시키기 위해 빠르고 안정적으로 데이터 전달 필요
-
-| 대안 | 장점 | 단점 |
-| --- | ---- | --- |
-| WebSocket | ● 클라이언트와 서버 간에 양방향 통신이 가능한 지속적인 연결을 제공 | ● 구현이 복잡하고 높은 리소스를 소모 |
-| Long Polling | ● 클라이언트가 서버에 데이터를 요청하면, 서버는 즉시 응답을 보내지 않고 데이터가 준비될 때까지 대기 상태를 유지<br>● 양방향 통신이 가능하고 실시간 데이터 처리가 가능 | ● 빈번한 연결과 응답을 반복하여 서버 부하가 증가 |
-| SSE | ● 서버 리소스 소모 적음<br>● Keep-Alive로 연결 유지 비용 낮음<br>● 단순하고 간편한 구현 | ● 바이너리 데이터 전송 제한<br>● 단방향 통신 |
-
-- 기술결정 : 서버에서 클라이언트로만 데이터 푸시가 필요한 경우에 적합하고, 사용자가 적은 리소스로 연결을 유지하기 때문에 SSE 방식 선택
 </details>
 
 
